@@ -5,6 +5,9 @@ import copy
 import math
 import torch
 
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+
 class TreeNode:
     def __init__(self, parent, prior_p):
         self.parent = parent
@@ -57,21 +60,14 @@ class MCTS:
         while True:
             if node.is_leaf():
                 break
-            # 노드 선택
             action, node = node.select(self.c_puct)
-            # 선택한 행동이 유효한지 확인
             if action not in state.get_valid_actions():
-                # 유효하지 않은 행동이면 노드를 삭제하고 다시 선택
                 del node.parent.children[action]
                 return
-            # 행동 적용
             state.do_move(action, state.phase)
             if state.done:
-                # 게임이 종료된 상태에서는 더 이상 플레이아웃을 진행하지 않음
                 return
-        # 리프 노드 평가
         if state.done:
-            # 게임이 종료된 상태에서는 leaf_value를 결정
             if state.winner == 1:
                 leaf_value = 1
             elif state.winner == 2:
@@ -80,9 +76,10 @@ class MCTS:
                 leaf_value = 0
         else:
             state_vector = state.get_state_vector()
-            state_tensor = torch.FloatTensor(state_vector).unsqueeze(0)
+            state_tensor = torch.FloatTensor(state_vector).unsqueeze(0).to(device)
             action_logits, leaf_value = self.policy_value_fn(state_tensor)
-            action_probs = torch.softmax(action_logits, dim=1).detach().numpy()[0]
+            action_probs = torch.softmax(action_logits, dim=1).cpu().detach().numpy()[0]
+            leaf_value = leaf_value.item()
             # 유효한 행동만 고려
             valid_actions = state.get_valid_actions()
             action_probs_masked = np.zeros_like(action_probs)

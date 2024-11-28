@@ -15,26 +15,29 @@ class QuartoEnv:
         self.done = False
         self.winner = None
         self.phase = 'select_piece'
-        self.current_player = 1
+        self.current_player = 2
         return self.get_state_vector()
 
     def get_state_vector(self):
         board_state_flattened = self.board.flatten()
         available_pieces_ids = np.array([self.get_piece_id(p)
-                                         for p in self.available_pieces])
+                                        for p in self.available_pieces])
         if len(available_pieces_ids) < 16:
             available_pieces_ids = np.pad(available_pieces_ids, (0, 16 - len(available_pieces_ids)),
-                                          'constant', constant_values=-1)
+                                        'constant', constant_values=-1)
         selected_piece_id = self.get_piece_id(self.selected_piece) if self.selected_piece else -1
         phase_indicator = 1 if self.phase == 'select_piece' else 0
+        current_player_indicator = self.current_player  # 현재 플레이어 (1 또는 2)
 
         state_vector = np.concatenate([
             board_state_flattened,
             available_pieces_ids,
             np.array([selected_piece_id]),
-            np.array([phase_indicator])
+            np.array([phase_indicator]),
+            np.array([current_player_indicator])
         ])
         return state_vector
+
 
     def get_valid_actions(self):
         if self.phase == 'select_piece':
