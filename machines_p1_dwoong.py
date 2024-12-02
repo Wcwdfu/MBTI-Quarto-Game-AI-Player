@@ -4,7 +4,7 @@ from itertools import product
 import time
 from collections import defaultdict
 
-class P2:
+class P1:
     def __init__(self, board, available_pieces):
         self.pieces = [(i, j, k, l) for i in range(2) for j in range(2) for k in range(2) for l in range(2)]
         self.board = board
