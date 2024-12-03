@@ -19,10 +19,14 @@ def train():
     policy_value_net = PolicyValueNet(state_size, action_size).to(device)
     optimizer = optim.Adam(policy_value_net.parameters(), lr=0.001)
 
-    num_iterations = 2
+
+    #--------------------------------------------------------#
+    num_iterations = 1
     games_per_iteration = 10
     n_playout = 1000  # MCTS 시뮬레이션 횟수
     c_puct = 5
+    #--------------------------------------------------------#
+
 
     # 로그 파일 관리 변수
     log_dir = "game_logs"

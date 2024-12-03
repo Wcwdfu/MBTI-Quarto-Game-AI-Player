@@ -19,7 +19,9 @@ class QuartoEnv:
         return self.get_state_vector()
 
     def get_state_vector(self):
+        # 보드 상태를 벡터로 변환
         board_state_flattened = self.board.flatten()
+        # 사용 가능한 말들을 벡터로 변환
         available_pieces_ids = np.array([self.get_piece_id(p)
                                         for p in self.available_pieces])
         if len(available_pieces_ids) < 16:
@@ -77,7 +79,6 @@ class QuartoEnv:
             else:
                 self.phase = 'select_piece'
                 reward = 0
-                self.current_player = 2 if self.current_player == 1 else 1
             done = self.done
         return self.get_state_vector(), reward, done
 
