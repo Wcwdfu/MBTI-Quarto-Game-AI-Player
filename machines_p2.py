@@ -1,250 +1,240 @@
 import numpy as np
 import random
 from itertools import product
+
 import time
-from collections import defaultdict
+import math
+import copy
+
+class MCTSNode:
+    def __init__(self, board, available_pieces, parent=None, move=None):
+        self.board = board
+        self.available_pieces = available_pieces
+        self.parent = parent
+        self.move = move
+        self.children = []
+        self.visits = 0
+        self.value = 0
+
 
 class P2:
     def __init__(self, board, available_pieces):
         self.pieces = [(i, j, k, l) for i in range(2) for j in range(2) for k in range(2) for l in range(2)]
         self.board = board
         self.available_pieces = available_pieces
-        #q테이블 상태값
-        self.q_table = defaultdict(float)
-        
-
-    # 승리할 수 있는 위치 찾기(바로 승리할 수 있는지)
-    def immidiate_win(self, board, piece):
-        
-        piece_idx = self.pieces.index(piece) + 1
-
-        # 승리 가능한 위치 저장
-        winning_pos = []
-        
-        for row, col in product(range(4), range(4)):
-            if board[row][col] == 0:
-
-                #새로운 보드 복사하여 생성 후 값 놓기
-                test_board = board.copy()
-                test_board[row][col] = piece_idx
-
-                #해당위치가 승리한다면 저장
-                if self._check_win(test_board):
-                    winning_pos.append((row, col))
-                    
-        return winning_pos
-    
-    # 상대 이길 수 있을 때 막기
-    def block(self, board, piece):
-
-        piece_idx = self.pieces.index(piece) + 1
-
-        #막을 곳 저장
-        block_pos = []
-        
-        for row, col in product(range(4), range(4)):
-            if board[row][col] == 0:
-
-                #상대 이기는 지 파악하기
-                dangerous = False #초기에 false로 설정
-                test_board = board.copy()
-                test_board[row][col] = piece_idx
-                
-                #available_peices 다 테스트하기
-                for test_piece in self.available_pieces:
-
-                    #같지 않을 때만 테스트 왜? 두 번 검사안하도록 하기 위해서
-                    if test_piece != piece:
-                        for r, c in product(range(4), range(4)):
-                            #비어 있는지 확인
-                            if test_board[r][c] == 0:
-                                test2_board = test_board.copy()
-                                test2_board[r][c] = self.pieces.index(test_piece) + 1
-
-                                if self._check_win(test2_board):
-                                    #승리한다면 true로 설정
-                                    dangerous = True
-                                    break
-                
-                if dangerous:
-                    block_pos.append((row, col))
-                    
-        return block_pos
-    
-    def evaluate_danger(self, piece):
-        
-        danger_score = 0
-        
-        
-        for row, col in product(range(4), range(4)):
-            if self.board[row][col] == 0:
-                test_board = self.board.copy()
-                test_board[row][col] = self.pieces.index(piece) + 1
-                
-                
-                for test_piece in self.available_pieces:
-                    if test_piece != piece:
-                        winning = self.immidiate_win(test_board, test_piece)
-                        danger_score += len(winning)
-        
-        return danger_score
-    
-    #아래는 뭐 승리, 줄, 2x2 확인하기 그냥 짜~
-    
-    def _check_win(self, board):
-        
-        for i in range(4):
-            row = [board[i][j] for j in range(4)]
-            col = [board[j][i] for j in range(4)]
-            if self.check_line(row) or self.check_line(col):
-                return True
-        
-        
-        diag1 = [board[i][i] for i in range(4)]
-        diag2 = [board[i][3-i] for i in range(4)]
-        if self.check_line(diag1) or self.check_line(diag2):
-            return True
-        
-        
-        for i in range(3):
-            for j in range(3):
-                square = [board[i][j], board[i][j+1], board[i+1][j], board[i+1][j+1]]
-                if self._check_square(square):
-                    return True
-        return False
-    
-    def check_line(self, line):
-        if 0 in line:
-            return False
-        pieces = [self.pieces[idx-1] for idx in line if idx > 0]
-        if len(pieces) != 4:
-            return False
-        return any(all(p[i] == pieces[0][i] for p in pieces) for i in range(4))
-    
-    def _check_square(self, square):
-        if 0 in square:
-            return False
-        pieces = [self.pieces[idx-1] for idx in square if idx > 0]
-        if len(pieces) != 4:
-            return False
-        return any(all(p[i] == pieces[0][i] for p in pieces) for i in range(4))
-    
-
-
-
-
-    def evaluate_st(self, row, col):
-        
-        #계산ㄴ
-        center_score = 4 - (abs(row-1.5) + abs(col-1.5))
-        
-        
-        adjacent_empty = 0
-        for dr, dc in [(-1,0), (1,0), (0,-1), (0,1)]:
-            new_row, new_col = row + dr, col + dc
-
-            #? 계산,,
-            if 0 <= new_row < 4 and 0 <= new_col < 4:
-                if self.board[new_row][new_col] == 0:
-                    adjacent_empty += 1
-        
-        return center_score + adjacent_empty * 0.5
-    
-
+        self.simulation_time = 0.5  # Default : 5 AND Max : 9
+        self.exploration_constant = 0.75
+        self.move_count = 0
+        self.turn = 0
 
     def select_piece(self):
-        if not self.available_pieces:
-            return None
+        root = MCTSNode(self.board, self.available_pieces)
+        self.turn = 0
 
-        #random 초기화
-        random.seed(time.time())
+        end_time = time.time() + self.simulation_time
 
-        #랜덤하게 섞기
-        shuffled_pieces = self.available_pieces[:]
-        random.shuffle(shuffled_pieces)
+        while time.time() < end_time:
+            self.move_count = 0  # Manage all process count
 
-        
-        safe_piece = []
-        danger_piece = []
+            node = self.select(root, None)
+            value = self.simulate(node)
+            # value = 1 - self.simulate(node)
+            self.backpropagate(node, value)
 
-        for piece in shuffled_pieces:
-            danger_score = self.evaluate_danger(piece)
-            if danger_score == 0:
-                safe_piece.append(piece)
-            else:
-                danger_piece.append((piece, danger_score))
-
-        #safe 값 중 랜덤으로 선택
-        if safe_piece:
-            best_piece = None
-            best_score = float('-inf')
-
-            for piece in safe_piece:
-                score = 0
-
-                for row, col in product(range(4), range(4)):
-                    if self.board[row][col] == 0:
-                        test_board = self.board.copy()
-                        test_board[row][col] = self.pieces.index(piece) + 1
-
-                        score += len(self.immidiate_win(test_board, piece))
-
-                if score > best_score:
-                    best_score = score
-                    best_piece = piece
-
-            #점수 같을 시 랜덤으로 선택
-            if best_piece:
-                return best_piece
-            return random.choice(safe_piece)
-
-        #덜 위험한 것 중 낮은 위험 선택 / 동점일 시 랜덤으로
-        if danger_piece:
-            danger_min = min(danger_piece, key=lambda x: x[1])[1]
-            danger_min_list = [piece for piece, score in danger_piece if score == danger_min]
-            return random.choice(danger_min_list)
-
-        #아무것도 아니면 랜덤으로 선택
-        return random.choice(shuffled_pieces)
-
-
+        best_child = max(root.children, key=lambda c: c.value)
+        return best_child.move[0]
 
     def place_piece(self, selected_piece):
-        available_location = [(row, col) for row, col in product(range(4), range(4))
-                                if self.board[row][col] == 0]
+        root = MCTSNode(self.board, self.available_pieces)
+        self.turn = 1
+        #print(selected_piece)  # test_page
 
-        #매번 랜덤으로 하기
-        random.seed(time.time())
+        end_time = time.time() + self.simulation_time
 
-        #바로 승리 가능한지 위치 확인
-        winning = self.immidiate_win(self.board, selected_piece)
-        if winning:
-            return random.choice(winning)
+        while time.time() < end_time:
+            self.move_count = 0  # Manage all process count
 
-        #상대방 승리 막기
-        blocking_moves = self.block(self.board, selected_piece)
-        if blocking_moves:
-            best_blocking_move = max(blocking_moves,
-                                    key=lambda pos: self.evaluate_st(pos[0], pos[1]))
-            return best_blocking_move
+            node = self.select(root, selected_piece)
+            value = self.simulate(node)
+            self.backpropagate(node, value)
 
-        #점수 가장 좋은 곳 찾기
-        best_pose = None
-        best_score = float('-inf')
+        best_child = max(root.children, key=lambda c: c.visits)
+        # print("root's value: " + str(root.value))  # test_page
 
-        for row, col in available_location:
-            score = self.evaluate_st(row, col)
+        return best_child.move[1]
 
-            test_board = self.board.copy()
-            test_board[row][col] = self.pieces.index(selected_piece) + 1
+    def select(self, node, piece):
+        if piece is None:
+            
+            safe_piece_list = self.safe_pieces()
+            print("safe")
+            print(safe_piece_list)
+            tttttt = self.available_pieces
+            # available_pieces에 safe_piece_list의 항목만 남기기
+            self.available_pieces = [piece for piece in self.available_pieces if piece in safe_piece_list]
+            print("available")
+            print(self.available_pieces)
+            if not self.available_pieces:  # available_pieces가 비어 있는 경우 처리
+                return random.choice(tttttt)
+            
+            piece = random.choice(self.available_pieces)  # 안전한 조각 중 선택
 
-            for test_piece in self.available_pieces:
-                if test_piece != selected_piece:
-                    score -= len(self.immidiate_win(test_board, test_piece)) * 2
+            
 
-            if score > best_score:
-                best_score = score
-                best_pose = (row, col)
+        while node.children:
+            # print("children exist")  # test_pages
+            '''
+            # Additional child node extensions
+            if not all(child.visits > 0 for child in node.children):
+                print("[Message] children exist but not visits")  # test_pages
+                return self.expand(node, piece)
+            '''
+            node = self.uct_select(node)
+            #return node  # test_page
+            # break  # test_page
 
-        #만약 위치 점수가 똑같으면 위치 랜덤으로 선택하기
-        return best_pose or random.choice(available_location)  
+        #print("[Message] no children")  # test_page
+        self.move_count += 1
+        return self.expand(node, piece)
+
+    def expand(self, node, piece):
+        if self.is_terminal(node.board):
+            return node
+
+        empty_cells = [(r, c) for r, c in product(range(4), repeat=2) if node.board[r][c] == 0]
+
+        for row, col in empty_cells:
+            new_board = copy.deepcopy(node.board)
+
+            new_board[row][col] = self.pieces.index(piece) + 1
+            new_available_pieces = node.available_pieces[:]
+
+            # print(f"add children in row: {row} col: {col}")  # test_page
+            child = MCTSNode(new_board, new_available_pieces, node, (piece, (row, col)))
+            node.children.append(child)
+
+        return self.uct_select(node)
+        # return random.choice(node.children)
+
+    def simulate(self, node):
+        board = copy.deepcopy(node.board)
+        
+        #print(node.available_pieces)
+        available_pieces = node.available_pieces[:]
+
+        while not self.is_terminal(board) and available_pieces:
+            piece = random.choice(available_pieces)
+            empty_cells = [(r, c) for r, c in product(range(4), repeat=2) if board[r][c] == 0]
+
+            if not empty_cells:
+                break
+
+            row, col = random.choice(empty_cells)
+            board[row][col] = self.pieces.index(piece) + 1
+            available_pieces.remove(piece)
+            self.move_count += 1
+
+        return self.evaluate(self.move_count)
+
+    def backpropagate(self, node, value):
+        while node:
+            node.visits += 1
+            #print(f"node's visit: {node.visits:>5}")  # test_page
+            node.value += value
+            #print(f"node's value: {node.value:>5}")  # test_page
+            value = 1 - value
+            node = node.parent
+        #print("--")
+
+    def uct_select(self, node):
+        for child in node.children:
+            if child.visits == 0:
+                return child
+
+        return max(node.children, key=lambda c: c.value / c.visits + 2 * self.exploration_constant * math.sqrt(
+                                                math.log(node.visits) / c.visits))
+
+    def safe_pieces(self):
+        safe_pieces = []
+
+        for piece in self.available_pieces:
+            is_safe = True
+
+            for row, col in product(range(4), repeat=2):
+                if self.board[row][col] == 0:
+                    temp_board = copy.deepcopy(self.board)
+                    temp_board[row][col] = self.pieces.index(piece) + 1
+
+                    if self.check_win(temp_board):
+                        is_safe = False
+                        break
+
+            if is_safe:
+                safe_pieces.append(piece)
+
+        # if safe_pieces:
+        #     safe_pieces.append(random.choice(self.available_pieces))
+
+
+        if not safe_pieces:  # 안전한 조각이 없는 경우
+            if self.available_pieces:  # 사용 가능한 조각이 있다면 랜덤으로 반환
+                print("난죽택")
+                safe_pieces.append(random.choice(self.available_pieces))
+
+        return safe_pieces
+
+    def is_terminal(self, board):
+        return self.check_win(board) or all(board[r][c] != 0 for r, c in product(range(4), repeat=2))
+
+    def check_line(self, line):
+        if 0 in line:
+            return False  # Incomplete line
+
+        characteristics = np.array([self.pieces[piece_idx - 1] for piece_idx in line])
+
+        for i in range(4):  # Check each characteristic (I/E, N/S, T/F, P/J)
+            if len(set(characteristics[:, i])) == 1:  # All share the same characteristic
+                return True
+
+        return False
+
+    def check_2x2_subgrid_win(self, board):
+        for r in range(3):
+            for c in range(3):
+                subgrid = [board[r][c], board[r][c + 1], board[r + 1][c], board[r + 1][c + 1]]
+
+                if 0 not in subgrid:  # All cells must be filled
+                    characteristics = [self.pieces[idx - 1] for idx in subgrid]
+
+                    for i in range(4):  # Check each characteristic (I/E, N/S, T/F, P/J)
+                        if len(set(char[i] for char in characteristics)) == 1:  # All share the same characteristic
+                            return True
+
+        return False
+
+    def check_win(self, board):
+        # Check rows, columns, and diagonals
+        for col in range(4):
+            if self.check_line([board[row][col] for row in range(4)]):
+                return True
+
+        for row in range(4):
+            if self.check_line([board[row][col] for col in range(4)]):
+                return True
+
+        if self.check_line([board[i][i] for i in range(4)]) or self.check_line([board[i][3 - i] for i in range(4)]):
+            return True
+
+        # Check 2x2 sub-grids
+        if self.check_2x2_subgrid_win(board):
+            return True
+
+        return False
+
+    def evaluate(self, count):
+        if self.turn == 1 and count % 2 == 1:
+            return 1  # 승
+        elif self.turn == 0 and count % 2 == 0:
+            return 1  # 승
+        else:
+            return 0  # 패

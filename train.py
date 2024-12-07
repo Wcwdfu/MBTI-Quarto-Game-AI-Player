@@ -21,7 +21,7 @@ def train():
 
 
     #--------------------------------------------------------#
-    num_iterations = 1
+    num_iterations = 2
     games_per_iteration = 10
     n_playout = 1000  # MCTS 시뮬레이션 횟수
     c_puct = 5
