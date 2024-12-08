@@ -3,6 +3,72 @@
 import numpy as np
 import copy
 
+
+
+def check_win_custom(board):
+    # board는 4x4 numpy array이며, 각 칸에 0이면 비어있음, 1~16 사이의 값이 말 ID+1를 의미
+    # 아래 로직은 QuartoEnv의 check_win() 메서드를 그대로 가져와서 함수화한 것입니다.
+    def check_line(line):
+        if 0 in line:
+            return False
+        characteristics = []
+        for piece_idx in line:
+            # piece_idx는 1부터 시작. piece_id는 0부터 시작하므로 piece_id = piece_idx - 1
+            piece_id = piece_idx - 1
+            char = [ (piece_id >> 3) & 1,
+                     (piece_id >> 2) & 1,
+                     (piece_id >> 1) & 1,
+                      piece_id & 1 ]
+            characteristics.append(char)
+        # 각 특징별로 모두 같다면 승리
+        for i in range(4):
+            vals = set([c[i] for c in characteristics])
+            if len(vals) == 1:
+                return True
+        return False
+
+    # 행, 열 검사
+    for i in range(4):
+        if check_line(board[i, :]) or check_line(board[:, i]):
+            return True
+
+    # 대각선 검사
+    if check_line([board[i, i] for i in range(4)]) or check_line([board[i, 3 - i] for i in range(4)]):
+        return True
+
+    # 2x2 사각형 검사
+    for r in range(3):
+        for c in range(3):
+            square = [board[r][c], board[r][c+1], board[r+1][c], board[r+1][c+1]]
+            if check_line(square):
+                return True
+
+    return False
+
+
+def get_piece_id(piece):
+    if piece is None:
+        return -1
+    return (piece[0] << 3) | (piece[1] << 2) | (piece[2] << 1) | piece[3]
+
+def check_immediate_winning_moves(board, piece_id):
+    winning_positions = []
+    for row in range(4):
+        for col in range(4):
+            if board[row][col] == 0:
+                board[row][col] = piece_id + 1
+                if check_win_custom(board):
+                    winning_positions.append((row, col))
+                board[row][col] = 0
+    return winning_positions
+
+def check_if_piece_gives_opponent_win(board, piece):
+    piece_id = get_piece_id(piece)
+    winning_positions = check_immediate_winning_moves(board, piece_id)
+    return len(winning_positions) > 0
+
+
+
 class QuartoEnv:
     def __init__(self):
         self.reset()
